@@ -25,7 +25,7 @@ inline in the request path where latency/cost matter.
 import re
 from dataclasses import dataclass
 
-CITATION_PATTERN = re.compile(r"\[([\w\-./]+::\d+)\]")
+CITATION_PATTERN = re.compile(r"\[(?:chunk_id:\s*)?([\w\-./]+::\d+)\]")
 
 DECLINE_PHRASES = [
     "don't have enough information",

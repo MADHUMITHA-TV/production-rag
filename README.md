@@ -48,8 +48,16 @@ export GROQ_API_KEY=your_key_here        # Windows: set GROQ_API_KEY=your_key_he
 
 ## 3. Run the pipeline, step by step
 
-The corpus is already included under `data/raw/` (72 FastAPI doc pages +
-their referenced code examples), so you don't need to re-scrape anything.
+`data/raw/` (the 72 FastAPI doc pages + their referenced code examples) is
+present on the original development machine but is intentionally excluded
+from version control (see `.gitignore`) to keep the repo lean — it's ~140
+third-party doc files, not project code. If you're continuing from this
+same machine, it's already there. Setting up fully fresh elsewhere? You'll
+need to supply `data/raw/fastapi_docs/` and `data/raw/fastapi_docs_src/`
+yourself (a fresh checkout of FastAPI's `docs/en/docs/` and `docs_src/`
+folders works). Note that `data/chunks.jsonl` (the post-chunking output)
+IS committed, so you can skip straight to Step 3 (embedding) without the
+raw corpus if you just want to see retrieval + generation working.
 
 ### Step 1 — Preprocess (resolve code macros, clean markdown)
 
@@ -146,3 +154,20 @@ Once this is running and you've kicked the tires on a handful of
 questions, we'll move to Phase 2: hybrid retrieval (BM25 + vector),
 cross-encoder reranking, and (stretch) role-based access control. Come
 back to the chat when you're ready.
+
+## 8. Real-run notes
+
+Two issues only surfaced when running Steps 3–4 for real (not in the
+original sandbox with stub embedders/generators):
+
+- **Windows path separators broke citation checking.** `chunk_id`s were
+  built with `str(path.relative_to(...))`, which uses backslashes on
+  Windows. The citation regex only matched forward slashes, so the
+  fabrication check silently never matched *any* citation on Windows.
+  Fixed by using `.as_posix()` when building chunk_ids.
+- **The LLM didn't always cite in the exact bracket format the prompt
+  asked for.** It sometimes echoed the context block's own
+  `[chunk_id: ...]` label style instead of the bare `[chunk_id]` format
+  the system prompt specified. Fixed by making the citation regex accept
+  both forms, and by removing the ambiguous bracket example from the
+  context template.

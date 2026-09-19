@@ -59,7 +59,7 @@ class Generator(ABC):
 class GroqGenerator(Generator):
     """Production generator using Groq's free-tier hosted inference."""
 
-    def __init__(self, model: str = "llama-3.1-8b-instant"):
+    def __init__(self, model: str = "openai/gpt-oss-20b"):
         # Imported lazily so this module doesn't hard-require the `groq`
         # package (or an API key) when running in stub mode.
         from groq import Groq

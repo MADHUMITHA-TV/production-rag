@@ -220,11 +220,11 @@ def run():
     all_chunks: list[Chunk] = []
 
     for md_path in md_files:
-        rel = str(md_path.relative_to(PROCESSED_DIR))
+        rel = md_path.relative_to(PROCESSED_DIR).as_posix()
         text = md_path.read_text(encoding="utf-8")
         units = parse_units(text)
         chunks = pack_units_into_chunks(units, source_file=rel)
-        all_chunks.append(chunks) if False else all_chunks.extend(chunks)
+        all_chunks.extend(chunks)
 
     with OUTPUT_PATH.open("w", encoding="utf-8") as f:
         for i, c in enumerate(all_chunks):

@@ -33,7 +33,7 @@ user_prompt_template: |
   Answer the question following the system rules. Cite chunk_ids inline.
 
 context_chunk_template: |
-  [chunk_id: {chunk_id}] (source: {source_file} > {breadcrumb})
+  Source ID: {chunk_id} (from {source_file} > {breadcrumb})
   {text}
 
 generation_params:
