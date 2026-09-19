@@ -1,0 +1,24 @@
+# Core pipeline
+chromadb
+rank_bm25          # Phase 2: hybrid retrieval
+pyyaml
+fastapi
+uvicorn
+
+# Embeddings (production) -- needs Hugging Face network access to download
+# model weights on first run. Not installed in the sandboxed build
+# environment (disk + network constrained); install this on your own
+# machine.
+sentence-transformers
+
+# Embeddings (sandbox-only fallback, no external downloads)
+scikit-learn
+
+# Generation (production) -- needs a free API key from console.groq.com
+groq
+
+# Phase 2/3
+# (cross-encoder reranking uses sentence-transformers' CrossEncoder class,
+# already covered by the sentence-transformers dependency above)
+ragas
+langfuse
