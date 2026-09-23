@@ -370,6 +370,13 @@ def main():
     # (no LLM-judge multi-sampling cost) -- for fast, cheap CI runs on every
     # push. The full Ragas suite is reserved for manual/scheduled runs, not
     # every commit, given the real rate-limit constraints this project hit.
+    allow_partial = "--allow-partial" in sys.argv  # don't require all 25 ids
+    # to be present to pass the gate -- for a deliberately partial CI
+    # smoke-test subset (e.g. --range 1:5) that's never meant to cover the
+    # full golden set on its own. Without this, results.jsonl/
+    # ragas_results.jsonl must NOT be committed to the repo (see .gitignore)
+    # -- otherwise a smoke test's gate could pass by silently relying on
+    # stale committed results for ids it never actually re-verified.
     range_arg = parse_range(sys.argv)
 
     full_golden_set = load_golden_set()
@@ -544,7 +551,7 @@ def main():
             f"questions due to an API failure."
         )
 
-    if not is_complete:
+    if not is_complete and not allow_partial:
         failures.append(
             f"Only {len(all_det_results)}/{len(full_golden_set)} questions evaluated "
             f"so far -- an incomplete set cannot be treated as a full pass."

@@ -4,3 +4,5 @@ __pycache__/
 .env
 data/raw/
 data/chroma_db/
+eval/results.jsonl
+eval/ragas_results.jsonl
