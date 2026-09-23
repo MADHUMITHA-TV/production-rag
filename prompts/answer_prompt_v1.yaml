@@ -11,8 +11,14 @@ system_prompt: |
   chunk is labeled with a chunk_id.
 
   Rules:
-  1. Every factual claim in your answer must be traceable to a specific
-     chunk. Cite it inline like [chunk_id] immediately after the claim.
+    1. Every factual claim in your answer must be traceable to a specific
+     chunk. Cite it inline using the EXACT chunk_id string shown after
+     "Source ID:" in the context below, wrapped in square brackets,
+     immediately after the claim -- for example:
+     "FastAPI validates the body against the model. [tutorial/body.md::1]"
+     Never write informal references like "(see chunk 3)" or "(chunk 0/1)"
+     -- always use the full bracketed chunk_id exactly as shown, even in
+     numbered lists or multi-section answers.
   2. If the retrieved context does not contain enough information to
      answer the question, say so explicitly: "I don't have enough
      information in the retrieved documentation to answer that." Do not
@@ -38,4 +44,4 @@ context_chunk_template: |
 
 generation_params:
   temperature: 0.1
-  max_tokens: 800
+  max_tokens: 1500

@@ -83,6 +83,9 @@ class GroqGenerator(Generator):
             temperature=params.get("temperature", 0.1),
             max_tokens=params.get("max_tokens", 800),
         )
+        # Recorded so callers can detect truncation (finish_reason == "length")
+        # rather than silently showing a cut-off answer as if it were complete.
+        self.last_finish_reason = response.choices[0].finish_reason
         return response.choices[0].message.content
 
 
@@ -99,7 +102,7 @@ class StubGenerator(Generator):
         # so the stub "answer" cites something that was actually retrieved.
         import re
 
-        match = re.search(r"\[chunk_id: ([\w\-./]+::\d+)\][^\n]*\n(.+?)(?=\n\n---|\Z)", user_prompt, re.DOTALL)
+        match = re.search(r"Source ID: ([\w\-./]+::\d+)[^\n]*\n(.+?)(?=\n\n---|\Z)", user_prompt, re.DOTALL)
         if not match:
             return "I don't have enough information in the retrieved documentation to answer that."
         chunk_id = match.group(1)
@@ -123,11 +126,14 @@ def build_generator(kind: str) -> Generator:
         raise ValueError(f"Unknown generator kind: {kind}")
 
 
-def generate_answer(question: str, retrieved_chunks: list[dict]) -> tuple[str, set[str]]:
+def generate_answer(question: str, retrieved_chunks: list[dict]) -> tuple[str, set[str], bool]:
     """
-    Returns (raw_answer, retrieved_chunk_ids). Caller is responsible for
-    passing raw_answer through citation_enforcer.enforce_or_flag before
-    showing it to a user.
+    Returns (raw_answer, retrieved_chunk_ids, was_truncated). Caller is
+    responsible for passing raw_answer through citation_enforcer.enforce_or_flag
+    before showing it to a user. was_truncated is True when the LLM hit
+    max_tokens mid-answer (finish_reason == "length") -- callers should
+    treat a truncated answer as untrustworthy even if it looks complete,
+    since a cut-off code example is worse than an explicit decline.
     """
     config = load_prompt_config()
     context_block = build_context_block(retrieved_chunks, config["context_chunk_template"])
@@ -142,6 +148,7 @@ def generate_answer(question: str, retrieved_chunks: list[dict]) -> tuple[str, s
         user_prompt=user_prompt,
         params=config["generation_params"],
     )
+    was_truncated = getattr(generator, "last_finish_reason", None) == "length"
 
     retrieved_ids = {c["chunk_id"] for c in retrieved_chunks}
-    return answer, retrieved_ids
+    return answer, retrieved_ids, was_truncated

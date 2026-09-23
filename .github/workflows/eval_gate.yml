@@ -1,0 +1,108 @@
+# Two-tier CI eval gate.
+#
+# WHY TWO TIERS, NOT ONE
+# =========================
+# Running the full Ragas-scored suite (faithfulness, context precision/
+# recall, answer relevancy) on every single push is a bad idea in practice,
+# not just in theory -- during development, a 5-question Ragas run took
+# ~15 minutes and meaningfully dented a 200,000-token/day free-tier budget.
+# Running the full 25-question set on every commit would be slow, costly,
+# and prone to failing PRs for reasons that have nothing to do with actual
+# code quality (a rate limit hit mid-run, not a real regression).
+#
+# So:
+#   - fast-deterministic-gate: runs on every push/PR. No Ragas, no LLM-judge
+#     multi-sampling cost. Still calls the real Groq generator once per
+#     question (so decline-correctness is tested against a REAL model's
+#     judgment, not the stub, which can never decline) -- but that's ~25
+#     cheap single-shot calls, not the 15+ minute multi-metric Ragas fan-out.
+#     Catches real regressions in retrieval, citation logic, and decline
+#     behavior fast and (relatively) cheaply.
+#   - full-ragas-gate: runs on manual trigger or a weekly schedule. The
+#     complete, expensive, LLM-judged quality suite. Deliberately NOT tied
+#     to every commit.
+#
+# SECRETS REQUIRED
+# ===================
+# GROQ_API_KEY must be set as a repository secret
+# (Settings -> Secrets and variables -> Actions -> New repository secret).
+
+name: RAG Evaluation Gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+  schedule:
+    - cron: "0 6 * * 1"  # every Monday 06:00 UTC
+
+jobs:
+  fast-deterministic-gate:
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Build embeddings index (data/chunks.jsonl is committed; data/raw is not)
+        run: python ingestion/embed_and_store.py
+        env:
+          EMBEDDER: bge
+
+      - name: Run fast deterministic + real-generation eval gate
+        run: python eval/run_eval.py --deterministic-only
+        env:
+          EMBEDDER: bge
+          GENERATOR: groq
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results-fast
+          path: eval/results.jsonl
+
+  full-ragas-gate:
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Build embeddings index
+        run: python ingestion/embed_and_store.py
+        env:
+          EMBEDDER: bge
+
+      - name: Run full Ragas-scored eval gate
+        run: python eval/run_eval.py
+        env:
+          EMBEDDER: bge
+          GENERATOR: groq
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results-full
+          path: |
+            eval/results.jsonl
+            eval/ragas_results.jsonl
