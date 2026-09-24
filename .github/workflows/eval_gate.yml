@@ -1,26 +1,23 @@
 # Two-tier CI eval gate.
 #
-# WHY TWO TIERS, NOT ONE
-# =========================
-# Running the full Ragas-scored suite (faithfulness, context precision/
-# recall, answer relevancy) on every single push is a bad idea in practice,
-# not just in theory -- during development, a 5-question Ragas run took
-# ~15 minutes and meaningfully dented a 200,000-token/day free-tier budget.
-# Running the full 25-question set on every commit would be slow, costly,
-# and prone to failing PRs for reasons that have nothing to do with actual
-# code quality (a rate limit hit mid-run, not a real regression).
+# WHY TWO TIERS, NOT ONE (revised after real evidence)
+# =======================================================
+# Original design: run all 25 questions (deterministic-only, no Ragas) on
+# every push, since single-shot generation seemed cheap enough. Real CI
+# evidence proved that wrong: a run against this shared account hit
+# Groq's 200,000 token/day limit at question 20/25, because the SAME
+# account is also used for local interactive development throughout the
+# day. On a free tier, "cheap per call" does not mean "safe to run on
+# every push" once you account for a human also actively using the same
+# quota. So the fast gate now runs a small, representative smoke-test
+# subset (5 questions: a mix of basic/intermediate/decline) instead of
+# the full 25 -- catches obvious regressions in retrieval, citation
+# logic, and decline behavior without risking the shared daily budget on
+# every commit.
 #
-# So:
-#   - fast-deterministic-gate: runs on every push/PR. No Ragas, no LLM-judge
-#     multi-sampling cost. Still calls the real Groq generator once per
-#     question (so decline-correctness is tested against a REAL model's
-#     judgment, not the stub, which can never decline) -- but that's ~25
-#     cheap single-shot calls, not the 15+ minute multi-metric Ragas fan-out.
-#     Catches real regressions in retrieval, citation logic, and decline
-#     behavior fast and (relatively) cheaply.
-#   - full-ragas-gate: runs on manual trigger or a weekly schedule. The
-#     complete, expensive, LLM-judged quality suite. Deliberately NOT tied
-#     to every commit.
+# The full 25-question set (plus, on manual/scheduled runs, the full
+# Ragas-scored suite) is reserved for workflow_dispatch or the weekly
+# schedule, run deliberately, not automatically on every push.
 #
 # SECRETS REQUIRED
 # ===================
@@ -39,7 +36,7 @@ on:
     - cron: "0 6 * * 1"  # every Monday 06:00 UTC
 
 jobs:
-  fast-deterministic-gate:
+  fast-smoke-gate:
     if: github.event_name == 'push' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
@@ -58,8 +55,8 @@ jobs:
         env:
           EMBEDDER: bge
 
-      - name: Run fast deterministic + real-generation eval gate
-        run: python eval/run_eval.py --deterministic-only
+      - name: Run smoke-test subset (5 of 25 questions -- see note above on shared free-tier quota)
+        run: python eval/run_eval.py --range 1:5 --deterministic-only --allow-partial
         env:
           EMBEDDER: bge
           GENERATOR: groq
@@ -69,7 +66,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: eval-results-fast
+          name: eval-results-smoke
           path: eval/results.jsonl
 
   full-ragas-gate:
